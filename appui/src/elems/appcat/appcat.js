@@ -4,12 +4,22 @@ import Button from '@mui/material/Button';
 // import reducer redux
 import { useSelector, useDispatch } from 'react-redux';
 import { updateAppcat } from '../mainlayout/appcatState';
-import { Typography } from '@mui/material';
+import { Icon, Tooltip, Typography } from '@mui/material';
+import Accordion from '@mui/material/Accordion';
+import AccordionActions from '@mui/material/AccordionActions';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SecurityIcon from '@mui/icons-material/Security';
+import CircularProgress from '@mui/material/CircularProgress';
+
 
 export default function Appcat(props) {
   const dispatch = useDispatch();
-  const appcat = useSelector((state) => state.appcats.current);
-  const [errorFetch, setErrorFetch] = React.useState(false);
+  //const appcat = useSelector((state) => state.appcats.current);
+  const [appcat, setAppcat] = React.useState(null);
+  const [errorFetch, setErrorFetch] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(true);
 
 
   // fetch data from backend immediately using UseEffect
@@ -25,54 +35,76 @@ export default function Appcat(props) {
         return response.json();
       })
       .then(data => {
-        setErrorFetch(false);
-        dispatch(updateAppcat(data));
-      }).catch(error => {
+        setAppcat(data);
+      }).catch(err => {
+        console.error(err);
         setErrorFetch(true);
+      }).finally(() => {
+        setIsLoading(false);
       });
-  }, [dispatch, props.appcat]);
+  }, []);
 
-
-  // that one ensure fetch of data every 2 seconds so it's "auto refresh" primitive feature
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      fetch('http://localhost:8080/' + props.appcat)
-        .then(response =>
-          {
-            if (!response.ok) {
-              return Promise.reject(response);
-            }
-            setErrorFetch(false);
-            return response.json();
-          }
-        )
-        .then(data => {
-          setErrorFetch(false);
-          dispatch(updateAppcat(data));
-        }).catch(error => {
-          setErrorFetch(true);
-        });
-    }, 2000);
-    return () => clearInterval(interval);
+  if (isLoading) {
+    return (
+      <>
+        <CircularProgress />
+      </>
+    )
   }
-  , [dispatch, props.appcat]);
+
+  if (errorFetch) {
+    return (
+      <>
+        <Typography variant="body1">No {props.appcat}, create one!</Typography>
+        <Button variant="contained" color="primary">Create {props.appcat}</Button>
+      </>
+    )
+  }
 
   return (
-    errorFetch ? <Typography variant="body1">Error fetching data</Typography> :
-
-    appcat && appcat.items && appcat.items.length > 0 ?
-    <Stack spacing={2} direction="row">
+    appcat && appcat.items && appcat.items.length > 0 &&
+    <Stack spacing={2} direction="column">
       {
-       appcat.items.map((item, index) => (
-          <Typography key={index} variant="body1">
-            {item.metadata.name ? item.metadata.name : "nie działa"}
-          </Typography>
+        appcat.items.map((item, index) => (
+
+          <Accordion key={index}>
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              aria-controls="panel3-content"
+              id="panel3-header"
+            >
+              <Typography>{item.metadata.labels['crossplane.io/claim-name']}</Typography>
+              <Tooltip title={item.spec.parameters.instances < 3 ? "HA Disabled" : "HA Enabled"} placement="right">
+                <SecurityIcon color={item.spec.parameters.instances ? 'disabled' : 'action'} />
+              </Tooltip>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography>
+                Name: {item.metadata.labels['crossplane.io/claim-name']}
+              </Typography>
+              <Typography>
+                Namespace: {item.metadata.labels['crossplane.io/claim-namespace']}
+              </Typography>
+              <Typography>
+                Maintenance: {item.spec.parameters.maintenance.dayOfWeek} {item.spec.parameters.maintenance.timeOfDay}
+              </Typography>
+              <Typography>
+                Version: {item.spec.parameters.service.majorVersion}
+              </Typography>
+              <Typography color={item.spec.parameters.service.serviceLevel == "besteffort" ? 'crimson' : "green"}>
+                Service Level: {item.spec.parameters.service.serviceLevel}
+              </Typography>
+              <Typography>
+                Size: {item.spec.parameters.size.plan}
+              </Typography>
+            </AccordionDetails>
+            <AccordionActions>
+              <Button color={'error'}>Remove</Button>
+              <Button>Login Credentials</Button>
+            </AccordionActions>
+          </Accordion>
         ))
       }
-    </Stack> :
-    <>
-    <Typography variant="body1">No {props.appcat}, create one!</Typography>
-    <Button variant="contained" color="primary">Create {props.appcat}</Button>
-    </>
+    </Stack>
   );
 }
